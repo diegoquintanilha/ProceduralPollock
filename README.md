@@ -2,13 +2,13 @@
 
 ProceduralPollock is an open source C++ project that generates abstract, math-based art using procedurally generated pixel shaders.
 
-The program creates a window using the Win32 API and DirectX 11, then uses a 64-bit seed (usually from the system time, but can be set manually) to procedurally generate a pixel shader.
+The program creates a window using the Win32 API and DirectX 11, then uses a 64-bit seed (usually from the system time, but can be set manually) to procedurally generate a pixel shader. The generation process is deterministic, i.e. the same seed will always generate the same shader.
 
 Press `spacebar` to generate a new shader. There might be a bit of lag when generating a new shader, depending on shader complexity (which is random).
 
 The generated images look like abstract expressionistic art, somewhat resembling to the style of Jackson Pollock, hence the name of the project.
 
-This project uses a custom PRNG (see `src/RandFS.h`) to deterministically produce a function that receives as input the X and Y coordinates of each pixel and the time, and outputs an RGB value for that pixel. From the given seed, it uses different techniques to procedurally compose primitive mathematical formulas to generate a single output function for a pixel shader, that is then compiled and displayed on the window.
+This project uses a custom PRNG (see `src/RandFS.h`) to procedurally generate a function that receives as input the X and Y coordinates of each pixel, along with the time, and outputs an RGB value for that pixel. From the given seed, it uses different techniques to compose primitive mathematical formulas and generate a single function. This function is then incorporated into a pixel shader, compiled, and rendered on the window.
 
 This technique was originally proposed in the paper [Hash Visualization: a New Technique to improve Real-World Security](https://users.ece.cmu.edu/~adrian/projects/validation/validation.pdf) by Adrian Perrig and Dawn Song. This project is just one possible implementation of the general idea outlined in the paper.
 
