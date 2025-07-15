@@ -55,7 +55,8 @@ project "ProceduralPollock"
 		symbols "On"
 		optimize "Speed"
 		inlining ("Auto")
-		flags { "MultiProcessorCompile", "LinkTimeOptimization" }
+		linktimeoptimization "On"
+		flags { "MultiProcessorCompile" }
 		
 	filter "configurations:Release"
 		defines "_RELEASE"
@@ -63,4 +64,5 @@ project "ProceduralPollock"
 		symbols "Off" -- This disables PDB generation in the final output folder
 		optimize "Speed"
 		inlining ("Auto")
-		flags { "MultiProcessorCompile", "LinkTimeOptimization" }
+		linktimeoptimization "On"
+		flags { "MultiProcessorCompile" }

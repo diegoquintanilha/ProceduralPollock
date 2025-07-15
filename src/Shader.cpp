@@ -12,7 +12,7 @@
 std::string GenerateShaderCode(uint64_t seed)
 {
 	// Uncomment here to set a specific seed
-//	seed = 302817110064ULL;
+//	seed = 37ULL;
 	Random rand(seed);
 
 	// Depths between 6 and 12 tend to generate interesting images

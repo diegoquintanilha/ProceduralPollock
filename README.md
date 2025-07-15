@@ -8,7 +8,7 @@ The generated images look like abstract expressionistic art, somewhat resembling
 
 The program creates a window using the Win32 API and DirectX 11, then uses a 64-bit seed (usually from the system time, but can be set manually) to procedurally generate a pixel shader. The generation process is deterministic, i.e. the same seed will always generate the same shader.
 
-Press `spacebar` to generate a new shader. Depending on the (random) shader complexity, there migth be a slight delay during generation.
+Press `spacebar` to generate a new shader. Depending on the (random) shader complexity, there will be a slight delay during generation. This delay may be longer in profile and release configurations, as they enable the highest shader optimization settings, which increase shader compilation time.
 
 This project uses a custom PRNG (see `src/RandFS.h`) to procedurally generate a function that receives as input the X and Y coordinates of each pixel, along with the time, and outputs an RGB value for that pixel. From the given seed, it uses different techniques to compose primitive mathematical formulas and generate a single function. This function is then incorporated into a pixel shader, compiled, and rendered on the window.
 
