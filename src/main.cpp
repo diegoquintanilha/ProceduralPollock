@@ -1,5 +1,8 @@
+#ifndef _WIN32
+#error ProceduralPollock is currently only supported on Windows.
+#endif
+
 #include <iostream>
-#include <string>
 #include <chrono>
 #include <cmath>
 
@@ -17,7 +20,7 @@ int main()
 	std::string pixelShader = GenerateShaderCode(currentSeed);
 	
 	// Create window and initialize graphics API
-	Graphics graphics(1080, 720, pixelShader.c_str(), int(pixelShader.length()));
+	Graphics graphics(1600, 900, pixelShader.c_str(), int(pixelShader.length()));
 	
 	bool pressedKey = false;
 
@@ -34,7 +37,7 @@ int main()
 			if (!pressedKey)
 			{
 				// Generate, compile and bind a new pixel shader
-				// Warning: complex shaders might take a few seconds to compile
+				// Complex shaders might take a few seconds to compile
 				currentSeed = currentTime;
 				std::string newShader = GenerateShaderCode(currentSeed);
 				graphics.CreatePixelShader(newShader.c_str(), int(newShader.length()));

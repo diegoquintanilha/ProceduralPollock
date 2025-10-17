@@ -4,15 +4,13 @@
 	RandFS (Random Fast and Simple) single header file, by Diego Taques Pimenta Quintanilha.
 	Questions and feedback are welcome (diego.quintanilha@hotmail.com).
 
+INCLUDE:
 	In order to use this file, do this:
-		#define RANDFS_IMPLEMENTATION
-	before you include this file in one C++ file to create the implementation.
-
-	i.e. one of your source files should look like this:
 		#define RANDFS_IMPLEMENTATION
 		#include "RandFS.h"
 
-	while all other source files that use RandFS can just do this:
+	in one of your source files to create the implementation.
+	All other source files that use RandFS can just do this:
 		#include "RandFS.h"
 
 	Examples of usage and benchmarks are available at https://github.com/diegoquintanilha/RandFS/ (COMING SOON!)
@@ -24,15 +22,15 @@ EXAMPLE USAGE:
 	You can give the constructor a seed, and then call any of the available member functions:
 
 		Random rand(42);
-		std::cout << rand.IntBetween(5, 10) << std::endl;
-		std::cout << rand.FloatNormal()     << std::endl;
+		int randomInteger = rand.IntBetween(5, 10);
+		float randomFloat = rand.FloatNormal();
 
 	To hash values using the Hash class, simply call any of its static member functions directly.
 	As a pure static class, it requires no instantiation. Just provide the value(s) you want to hash as arguments:
 
-		uint64_t n = 12345ULL;
-		std::cout << Hash::IntBetween(n, 5, 10) << std::endl;
-		std::cout << Hash::FloatNormal(n)       << std::endl;
+		uint64_t n = 42ULL;
+		int randomInteger = Hash::IntBetween(n, 5, 10);
+		float randomFloat = Hash::FloatNormal(n);
 
 	The example file at https://github.com/diegoquintanilha/RandFS/Examples/RandFS (COMING SOON!) demonstrates how to use most of the available functions
 
@@ -48,9 +46,44 @@ LICENSE:
 
 */
 
+#pragma region Preprocessor
+
+#ifndef RANDFS_NO_STD
+
 #include <cstdint> // For data types with explicit sizes
-#include <cstring> // For std::memcpy
-#include <limits> // For std::numeric_limits
+#include <cstring> // For memcpy
+
+#else
+
+typedef int int32_t;
+typedef unsigned int uint32_t;
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
+/*
+	This will work in most modern desktops, but
+	there might be some platforms that do not use
+	32-bit int and 64-bit long long.
+
+	For example, while most modern platforms use
+	32-bit int and 32-bit long, both 64-bit Linux and MacOS
+	use 32-bit int and 64-bit long. At the same time,
+	some Arduino boards use 16-bit int and 32-bit long.
+
+	So, if you are going to use this code in an Arduino
+	or any other platform that uses different type sizes,
+	you must swap the typedefs for something like this:
+
+	typedef long int32_t;
+	typedef unsigned long uint32_t;
+
+	Or anything else that satisfies the static asserts below.
+*/
+static_assert(sizeof( int32_t) == 4, "RandFS requires int32_t to have a size of exactly 32 bits (4 bytes).");
+static_assert(sizeof(uint32_t) == 4, "RandFS requires uint32_t to have a size of exactly 32 bits (4 bytes).");
+static_assert(sizeof( int64_t) == 8, "RandFS requires int64_t to have a size of exactly 64 bits (8 bytes).");
+static_assert(sizeof(uint64_t) == 8, "RandFS requires uint64_t to have a size of exactly 64 bits (8 bytes).");
+
+#endif // RANDFS_NO_STD
 
 /*
 	Some functions in this library rely on bit copy
@@ -72,9 +105,19 @@ LICENSE:
 	It also relies on a float implementation that follows
 	the IEEE Standard for Floating-Point Arithmetic (IEEE 754).
 	Systems that do not use such standard are, once again, extremely rare.
+
+	If the <limits> library can't be used to check for compliance
+	with the IEEE 754 standard, it will be assumed true, based
+	on the lack of other cross-platform compile-time ways to check
+	for compliance, as well as because of the rarity of non-compliant systems.
 */
 static_assert(sizeof(int32_t) == sizeof(float), "RandFS requires int32_t and float to have the same bit size.");
+#ifndef RANDFS_NO_STD
+#include <limits>
 static_assert(std::numeric_limits<float>::is_iec559, "RandFS requires float types to follow the IEEE 754 standard.");
+#endif // RANDFS_NO_STD
+
+#pragma endregion
 
 #ifndef RANDFS_NO_RANDOM
 
@@ -155,6 +198,12 @@ private:
 
 	uint32_t m_Cache; // Stored value for next 32-bit call
 	bool m_HasCache; // Does m_Cache contain a value that has not been used yet?
+
+#ifdef RANDFS_NO_STD
+	// Manual implementation of memcpy
+	static void memcpy(void* dst, const void* src, uint32_t size);
+#endif // RANDFS_NO_STD
+
 };
 
 #pragma endregion
@@ -266,11 +315,25 @@ float Random::FloatNormal()
 	float u1 = FloatO();
 	float u2 = 1.0f - u1;
 	int32_t r1, r2;
-	std::memcpy(&r1, &u1, sizeof(float));
-	std::memcpy(&r2, &u2, sizeof(float));
-	return 5.0003944e-8f * (r1 - r2);
+	memcpy(&r1, &u1, sizeof(float));
+	memcpy(&r2, &u2, sizeof(float));
+	return 5.0003944e-8f * float(r1 - r2);
 }
 float Random::FloatNormal(float mean, float stdDev) { return FloatNormal() * stdDev + mean; }
+
+#ifdef RANDFS_NO_STD
+
+void Random::memcpy(void* dst, const void* src, uint32_t size)
+{
+	// The C++ standard specifically allows any type to be
+	// accessed as char without invoking undefined behavior
+	const char* srcBytes = reinterpret_cast<const char*>(src);
+    char* dstBytes = reinterpret_cast<char*>(dst);
+    for (uint32_t i = 0U; i < size; i++)
+		dstBytes[i] = srcBytes[i];
+}
+
+#endif // RANDFS_NO_STD
 
 #pragma endregion
 
@@ -324,6 +387,11 @@ private:
 	template <typename... OtherT>
 	static uint32_t Pair(uint32_t k0, uint32_t k1, uint32_t k2, uint32_t k3, uint32_t k4, uint32_t k5, uint32_t k6, uint32_t k7, uint32_t k8, OtherT... kn)
 	{ return Pair(k0, k1, k2, k3, k4, k5, k6, Pair(k7, k8, kn...)); }
+
+#ifdef RANDFS_NO_STD
+	// Manual implementation of memcpy
+	static void memcpy(void* dst, const void* src, uint32_t size);
+#endif // RANDFS_NO_STD
 
 #pragma endregion
 
@@ -379,7 +447,7 @@ public:
 		// Copy contents of n into a uint64_t array
 		static constexpr uint32_t contentSize = (sizeof(T) + sizeof(uint64_t) - 1U) / sizeof(uint64_t); // Same as sizeof(T) / sizeof(uint64_t) but rounded up
 		uint64_t contents[contentSize] = { 0 };
-		std::memcpy(contents, &n, sizeof(T));
+		memcpy(contents, &n, sizeof(T));
 
 		uint64_t x = contents[0];
 
@@ -397,7 +465,7 @@ public:
 		// Copy contents of n into a uint32_t array
 		static constexpr uint32_t contentSize = (sizeof(T) + sizeof(uint32_t) - 1U) / sizeof(uint32_t); // Same as sizeof(T) / sizeof(uint32_t) but rounded up
 		uint32_t contents[contentSize] = { 0 };
-		std::memcpy(contents, &n, sizeof(T));
+		memcpy(contents, &n, sizeof(T));
 
 		uint32_t x = contents[0];
 
@@ -421,7 +489,7 @@ public:
 		// Copy contents of each element of arr into a uint64_t array and pair them into x
 		for (uint32_t i = 0U; i < size; i++)
 		{
-			std::memcpy(contents, &arr[i], sizeof(T));
+			memcpy(contents, &arr[i], sizeof(T));
 
 			for (uint32_t j = 0U; j < contentSize; j++)
 			{
@@ -443,7 +511,7 @@ public:
 		// Copy contents of each element of arr into a uint32_t array and pair them into x
 		for (uint32_t i = 0U; i < size; i++)
 		{
-			std::memcpy(contents, &arr[i], sizeof(T));
+			memcpy(contents, &arr[i], sizeof(T));
 
 			for (uint32_t j = 0U; j < contentSize; j++)
 			{
@@ -518,7 +586,7 @@ public:
 		// Copy contents of n into a uint64_t array
 		static constexpr uint32_t contentSize = (sizeof(T) + sizeof(uint64_t) - 1U) / sizeof(uint64_t); // Same as sizeof(T) / sizeof(uint64_t) but rounded up
 		uint64_t contents[contentSize] = { 0 };
-		std::memcpy(contents, &n, sizeof(T));
+		memcpy(contents, &n, sizeof(T));
 
 		uint64_t x = contents[0];
 
@@ -536,7 +604,7 @@ public:
 		// Copy contents of n into a uint32_t array
 		static constexpr uint32_t contentSize = (sizeof(T) + sizeof(uint32_t) - 1U) / sizeof(uint32_t); // Same as sizeof(T) / sizeof(uint32_t) but rounded up
 		uint32_t contents[contentSize] = { 0 };
-		std::memcpy(contents, &n, sizeof(T));
+		memcpy(contents, &n, sizeof(T));
 
 		uint32_t x = contents[0];
 
@@ -560,7 +628,7 @@ public:
 		// Copy contents of each element of arr into a uint64_t array and pair them into x
 		for (uint32_t i = 0U; i < size; i++)
 		{
-			std::memcpy(contents, &arr[i], sizeof(T));
+			memcpy(contents, &arr[i], sizeof(T));
 
 			for (uint32_t j = 0U; j < contentSize; j++)
 			{
@@ -582,7 +650,7 @@ public:
 		// Copy contents of each element of arr into a uint32_t array and pair them into x
 		for (uint32_t i = 0U; i < size; i++)
 		{
-			std::memcpy(contents, &arr[i], sizeof(T));
+			memcpy(contents, &arr[i], sizeof(T));
 
 			for (uint32_t j = 0U; j < contentSize; j++)
 			{
@@ -694,8 +762,8 @@ float Hash::FloatNormal(uint32_t n)
 	float u1 = FloatO(n);
 	float u2 = 1.0f - u1;
 	int32_t r1, r2;
-	std::memcpy(&r1, &u1, sizeof(float));
-	std::memcpy(&r2, &u2, sizeof(float));
+	memcpy(&r1, &u1, sizeof(float));
+	memcpy(&r2, &u2, sizeof(float));
 	return 5.0003944e-8f * (r1 - r2);
 }
 float Hash::FloatNormal(uint32_t n, float mean, float stdDev) { return FloatNormal(n) * stdDev + mean; }
@@ -781,8 +849,8 @@ float Hash::FloatNormal(uint32_t n, uint32_t seed)
 	float u1 = FloatO(n, seed);
 	float u2 = 1.0f - u1;
 	int32_t r1, r2;
-	std::memcpy(&r1, &u1, sizeof(float));
-	std::memcpy(&r2, &u2, sizeof(float));
+	memcpy(&r1, &u1, sizeof(float));
+	memcpy(&r2, &u2, sizeof(float));
 	return 5.0003944e-8f * (r1 - r2);
 }
 float Hash::FloatNormal(uint32_t n, uint32_t seed, float mean, float stdDev) { return FloatNormal(n, seed) * stdDev + mean; }
@@ -837,6 +905,20 @@ uint32_t Hash::String32(const char* string, uint32_t seed)
 	return UInt32(x, seed);
 }
 
+#ifdef RANDFS_NO_STD
+
+void Hash::memcpy(void* dst, const void* src, uint32_t size)
+{
+	// The C++ standard specifically allows any type to be
+	// accessed as char without invoking undefined behavior
+	const char* srcBytes = reinterpret_cast<const char*>(src);
+    char* dstBytes = reinterpret_cast<char*>(dst);
+    for (uint32_t i = 0U; i < size; i++)
+		dstBytes[i] = srcBytes[i];
+}
+
+#endif // RANDFS_NO_STD
+
 #pragma endregion
 
 #endif // RANDFS_IMPLEMENTATION
@@ -855,7 +937,7 @@ VENDOR LICENSES:
 	Both the 64-bit and 32-bit core hash functions
 		Hash::UInt64(uint64_t n)
 		Hash::UInt32(uint32_t n)
-	are an implementation of the Murmur3 hash by Google.
+	are implementations of the Murmur3 hash by Google.
 	The license can be found at https://github.com/google/cityhash/?tab=MIT-1-ov-file
 
 	The core PRNG implemented in the functions

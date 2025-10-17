@@ -1,13 +1,20 @@
-#include "Graphics.h"
+﻿#include "Graphics.h"
 
 #include <iostream>
-#include <string>
-#include <windows.h>
+#include <cstdint>
+#include <cstdlib>
+#include <Windows.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "d3dcompiler.lib")
+// This macro defines the speed tradeoff between
+// compilation time and runtime of the generated shaders
+// 0 = Fastest compile, worst runtime
+// 1 = Fast compile, slow runtime
+// 2 = Average compile, average runtime
+// 3 = Slow compile, fast runtime
+// 4 = Slowest compile, fastest runtime
+#define SHADER_OPTIMIZATION_LEVEL 0
 
 #pragma region Defines
 
@@ -15,7 +22,13 @@
 
 #define LOG(x) std::cout << x << std::endl
 
-#define _ERROR_AT "Error on file '" << __FILE__ << "', on function '" << __FUNCSIG__ << "' at line " << __LINE__ << ": "
+// Cross-platform macro for getting the function signature
+#if defined(_MSC_VER)
+    #define __FUNCTION_SIGNATURE__ __FUNCSIG__
+#else
+    #define __FUNCTION_SIGNATURE__ __PRETTY_FUNCTION__
+#endif
+#define _ERROR_AT "Error on file '" << __FILE__ << "', on function '" << __FUNCTION_SIGNATURE__ << "' at line " << __LINE__ << ": "
 
 #define _PAUSE system("pause")
 
@@ -53,7 +66,7 @@
 
 Graphics::Graphics(int width, int height, const char* shaderPtr, int shaderSize)
 {
-	HINSTANCE hInstance = GetModuleHandleW(nullptr);
+	HINSTANCE hInstance = GetModuleHandle(nullptr);
 
 	static const wchar_t* className = L"WindowClass";
 
@@ -67,14 +80,14 @@ Graphics::Graphics(int width, int height, const char* shaderPtr, int shaderSize)
 		.cbWndExtra		= 0,
 		.hInstance		= hInstance,
 		.hIcon			= nullptr,
-		.hCursor		= LoadCursorW(nullptr, IDC_ARROW), // Use standard cursor
+		.hCursor		= LoadCursor(nullptr, IDC_ARROW), // Use standard cursor
 		.hbrBackground	= nullptr, // Do not use winapi to draw anything, we will draw ourselves
 		.lpszMenuName	= nullptr,
 		.lpszClassName	= className,
 		.hIconSm		= nullptr // This uses the same icon for small (TODO: check if this is necessary when using different images on the same .ico file)
 	};
 
-	ASSERT_CALL(RegisterClassExW(&m_WindowClass), "could not register window class");
+	ASSERT_CALL(RegisterClassEx(&m_WindowClass), "could not register window class");
 
 	RECT wr =
 	{
@@ -86,11 +99,11 @@ Graphics::Graphics(int width, int height, const char* shaderPtr, int shaderSize)
 	ASSERT_CALL(AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, false), "could not calculate window rect");
 
 	// Create window
-	ASSERT_CALL(m_WindowHandle = CreateWindowExW
+	ASSERT_CALL(m_WindowHandle = CreateWindowEx
 	(
 		0,
 		className,
-		L"Random Image",
+		L"ProceduralPollock",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
@@ -186,19 +199,19 @@ Graphics::~Graphics()
 	
 	// Window
 	ASSERT_CALL(DestroyWindow(m_WindowHandle), "could not destroy window");
-	ASSERT_CALL(UnregisterClassW(m_WindowClass.lpszClassName, m_WindowClass.hInstance), "could not unregister window class");
+	ASSERT_CALL(UnregisterClass(m_WindowClass.lpszClassName, m_WindowClass.hInstance), "could not unregister window class");
 }
 
 bool Graphics::UpdateInputs() const
 {
 	MSG msg;
-	while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 	{
 		if (msg.message == WM_QUIT)
 			return false;
 
 		TranslateMessage(&msg);
-		DispatchMessageW(&msg);
+		DispatchMessage(&msg);
 	}
 
 	return true;
@@ -232,7 +245,19 @@ void Graphics::CreatePixelShader(const void* shaderPtr, int shaderSize)
 	#else
 
 		// Compilation flags
-		uint32_t flags = D3DCOMPILE_PARTIAL_PRECISION | D3DCOMPILE_OPTIMIZATION_LEVEL3;
+		uint32_t flags = D3DCOMPILE_PARTIAL_PRECISION | D3DCOMPILE_SKIP_VALIDATION;
+
+		#if SHADER_OPTIMIZATION_LEVEL == 0
+			flags |= D3DCOMPILE_SKIP_OPTIMIZATION;
+		#elif SHADER_OPTIMIZATION_LEVEL == 1
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL0;
+		#elif SHADER_OPTIMIZATION_LEVEL == 2
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL1;
+		#elif SHADER_OPTIMIZATION_LEVEL == 3
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL2;
+		#elif SHADER_OPTIMIZATION_LEVEL == 4
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+		#endif
 
 		// Compile shader
 		ID3DBlob* blob = nullptr;
@@ -259,7 +284,7 @@ void Graphics::UpdateConstantBuffer(float x, float y, float z, float w) const
 	// Disable GPU access to the constant buffer data, and get a pointer to it
 	ASSERT_WINDOWS(m_Context->Map(m_ConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "could not map constant buffer");
 	// Update constant buffer through the subresource pointer
-	std::memcpy(msr.pData, newData, 4 * sizeof(float));
+	memcpy(msr.pData, newData, 4 * sizeof(float));
 	// Reenable GPU access to the constant buffer data
 	m_Context->Unmap(m_ConstantBuffer, 0);
 }

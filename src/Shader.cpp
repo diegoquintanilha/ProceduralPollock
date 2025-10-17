@@ -1,7 +1,6 @@
 #include "Shader.h"
 
 #include <iostream>
-#include <string>
 
 #define RANDFS_IMPLEMENTATION
 #include "RandFS.h"
@@ -11,13 +10,21 @@
 
 std::string GenerateShaderCode(uint64_t seed)
 {
+
+	seed = Hash::UInt64(seed);
+
 	// Uncomment here to set a specific seed
-//	seed = 37ULL;
+//	seed = 420ULL;
+
 	Random rand(seed);
 
 	// Depths between 6 and 12 tend to generate interesting images
 	// Add two random values to bias towards the middle (9)
 	int maxDepth = rand.IntBetween(3, 7) + rand.IntBetween(3, 7);
+	
+	// This generates very interesting images, but some computers can't handle it
+	// Uncomment at your own risk
+	//maxDepth = 12;
 
 	#pragma region Function definitions
 
@@ -112,26 +119,33 @@ std::string GenerateShaderCode(uint64_t seed)
 	{
 		return 0.70710678f * sqrt(x * x + y * y); // Scale by 1 / sqrt(2)
 	}	
+	
+	float fMin(float x, float y)
+	{
+		return x < y ? x : y;
+	}
 
 	float fMax(float x, float y)
 	{
 		return x > y ? x : y;
 	}
 	
-	float fMin(float x, float y)
-	{
-		return x < y ? x : y;
-	}
-	
 	float fPow(float x, float y)
 	{
-		float exp1 = y + y - 1.0f;
-		float exp2 = pow(10.0f, exp1);
-		return pow(x, exp2);
+		if (x < 0.01f)
+			x = 0.01f;
+		if (x > 0.99f)
+			x = 0.99f;
+		float exp = exp2(4.0f * y - 2.0f);
+		return pow(x, exp);
 	}
 
 	float fBell(float x, float y)
 	{
+		if (x < 0.01f)
+			x = 0.01f;
+		if (x > 0.99f)
+			x = 0.99f;
 		float y2 = y * y;
 		return pow(4.0f * x * (1.0f - x), 20.0f * y2 * y2 + 0.3f);
 	}
@@ -142,10 +156,12 @@ std::string GenerateShaderCode(uint64_t seed)
 		return 0.5f + 0.5f * cos(MAX_FREQUENCY * x * y);
 	}
 	
-	float fBounce(float x, float y)
+	float fWaveDamp(float x, float y)
 	{
 		const float FREQUENCY_FACTOR = 3.0f * 3.1415927f;
-		return abs(ldexp(cos(FREQUENCY_FACTOR * x * (y + 0.5f)), -3.0f * x));
+		const float SHIFT_FACTOR = 1.0f / 6.0f;
+		float osc = ldexp(cos(FREQUENCY_FACTOR * x * (y + SHIFT_FACTOR)), -x * x);
+		return osc * osc;
 	}
 
 	// -------------------------------------
@@ -156,10 +172,20 @@ std::string GenerateShaderCode(uint64_t seed)
 		return (1.0f - z) * x + z * y;
 	}
 	
+	float fSmoothLerp(float x, float y, float z)
+	{
+		float z2 = z * z;
+		float z3 = z2 * z;
+		float smooth = z2 + z2 + z2 - z3 - z3;
+		return smooth * (y - x) + x;
+	}
+	
 	float fMlerp(float x, float y, float z)
 	{
 		if (x < 0.0001f)
 			x = 0.0001f;
+		if (y < 0.0001f)
+			y = 0.0001f;
 		return x * pow(y / x, z);
 	}
 	
@@ -233,7 +259,7 @@ std::string GenerateShaderCode(uint64_t seed)
 		float3 res = v - float3(x, x, x);
 		return lerp(-res, res, step(0.0f, res));
 	}
-	
+
 	)";
 
 	#pragma endregion
@@ -276,7 +302,7 @@ std::string GenerateShaderCode(uint64_t seed)
 		"cosTime", // cos(time)
 #endif
 		"#", // Random constant
-		"#" // Double chance
+		"#" // Double the chance
 	};
 	const int valuesSize = sizeof(values) / sizeof(const char*);
 	
@@ -296,20 +322,20 @@ std::string GenerateShaderCode(uint64_t seed)
 		"fGeom(@, @)",
 		"fHarm(@, @)",
 		"fHypo(@, @)",
-		"fInv(fHypo(@, @))", // Compensate for bias
-		"fMax(@, @)",
 		"fMin(@, @)",
+		"fMax(@, @)",
 		"fPow(@, @)",
 		"fBell(@, @)",
 		"fInv(fBell(@, @))", // Compensate for bias
 		"fWave(@, @)",
 		"fWave(@, @)", // Double the chance
-		//"fBounce(@, @)",
-		//"fInv(fBounce(@, @))", // These generate jittery, noisy images
+		"fWaveDamp(@, @)",
+		"fInv(fWaveDamp(@, @))",
 		"fLerp(@, @, @)",
+		"fSmoothLerp(@, @, @)",
 		"fMlerp(@, @, @)",
-		//"fClamp(@, @, @)", // This generates ugly discontinuities, keep deactivated
-		"fDist(@, @, @, @)",
+//		"fClamp(@, @, @)", // This generates ugly discontinuities
+		"fDist(@, @, @, @)", // Compare variables to variables
 		"fDist(@, @, #, #)", // Compare variables to fixed point
 		"fDist(uv.x, uv.y, @, @)", // Compare pixel coords to variables
 		"fDist(uv.x, uv.y, #, #)", // Compare pixel coords to fixed point
@@ -317,7 +343,7 @@ std::string GenerateShaderCode(uint64_t seed)
 		"fInv(fDist(@, @, #, #))", // Compensate for bias
 		"fInv(fDist(uv.x, uv.y, @, @))", // Compensate for bias
 		"fInv(fDist(uv.x, uv.y, #, #))", // Compensate for bias
-		"fDistLine(@, @, @, @)",
+		"fDistLine(@, @, @, @)", // Compare variables to variables
 		"fDistLine(@, @, #, #)", // Compare variables to fixed line
 		"fDistLine(uv.x, uv.y, @, @)", // Compare pixel coords to variable line
 		"fDistLine(uv.x, uv.y, #, #)", // Compare pixel coords to fixed line
@@ -331,8 +357,8 @@ std::string GenerateShaderCode(uint64_t seed)
 	static const char* masks[] =
 	{
 		"rgb",
-		"rgb", // Increase the chance of no mask
-		"rgb", // Increase the chance of no mask
+		"rgb", // Repeat to increase the chance of no mask
+		"rgb", // Repeat to increase the chance of no mask
 		"fAdd3(rgb, @)",
 		"fSub3(rgb, @)",
 		"fAdd3(fSub3(rgb, @), @)",
@@ -385,8 +411,8 @@ std::string GenerateShaderCode(uint64_t seed)
 		pos = mainFunction.find('#');
 	}
 
-	//std::cout << mainFunction << std::endl;
-	//std::cout << "Shader code generated using seed " << seed << std::endl;
+//	std::cout << mainFunction << std::endl;
+	std::cout << "Shader seed: " << seed << std::endl;
 
 	return functionDefinitions + mainFunction;
 }
